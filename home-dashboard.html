@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-touch-fullscreen" content="yes">
+<title>Home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@200;300;400;600&family=Barlow:wght@300;400&family=Spectral:ital,wght@1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; font-family:'Barlow',sans-serif; -webkit-font-smoothing:antialiased; }
+
+body.day {
+  --text-1:#1c1710; --text-2:#3a3020; --text-3:#7a6a50;
+  --accent:#a06010; --accent-dim:rgba(160,96,16,0.18); --accent-glow:rgba(160,96,16,0.5);
+  --card-bg:rgba(255,248,235,0.75); --card-border:rgba(0,0,0,0.08); --card-shadow:0 2px 20px rgba(0,0,0,0.10);
+  --prog-a:#7a4010; --prog-b:#c07828; --prog-c:#e0a030;
+  --cal-soon:#c03000; --graph-line:rgba(160,96,16,0.7); --graph-fill:rgba(160,96,16,0.08);
+}
+body.night {
+  --text-1:#f0e8d4; --text-2:#c8b890; --text-3:#8a7a60;
+  --accent:#d4922a; --accent-dim:rgba(212,146,42,0.16); --accent-glow:rgba(212,146,42,0.5);
+  --card-bg:rgba(18,22,14,0.75); --card-border:rgba(212,146,42,0.16); --card-shadow:0 2px 28px rgba(0,0,0,0.5);
+  --prog-a:#4a3010; --prog-b:#986020; --prog-c:#c88828;
+  --cal-soon:#e05020; --graph-line:rgba(212,146,42,0.8); --graph-fill:rgba(212,146,42,0.10);
+}
+
+/* ── CANVAS LAYERS ── */
+#sky       { position:fixed; inset:0; z-index:0; width:100%; height:100%; }
+#particles { position:fixed; inset:0; z-index:1; width:100%; height:100%; pointer-events:none; }
+.grain     { position:fixed; inset:0; z-index:2; pointer-events:none; mix-blend-mode:overlay; opacity:0.04;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"); }
+
+/* ── PARALLAX CONTAINER ── */
+.parallax-wrap { position:fixed; inset:0; z-index:3; pointer-events:none; }
+.parallax-layer { position:absolute; inset:0; transition:transform 0.1s linear; }
+
+/* ── SHELL ── */
+.shell { position:relative; z-index:4; width:100vw; height:100vh; display:grid; grid-template-rows:1fr auto; padding:42px 50px 36px; }
+
+/* ── HERO ── */
+.hero { display:grid; grid-template-columns:1fr auto; align-items:end; padding-bottom:24px; position:relative; }
+.hero::before { content:''; position:absolute; top:-42px; left:-50px; right:-50px; height:2px;
+  background:linear-gradient(90deg,var(--accent) 0%,transparent 60%); opacity:0.55; }
+
+.loc-row { display:flex; align-items:center; gap:9px; margin-bottom:14px; opacity:0; animation:up .7s ease forwards .05s; }
+.loc-pip { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent-glow); animation:pipPulse 2.8s ease-in-out infinite; }
+@keyframes pipPulse { 0%,100%{box-shadow:0 0 6px var(--accent-glow);} 50%{box-shadow:0 0 20px var(--accent-glow),0 0 35px var(--accent-dim);} }
+.loc-label { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:14px; letter-spacing:.22em; text-transform:uppercase; color:var(--text-2); transition:color 2s; }
+
+.greeting { font-family:'Spectral',serif; font-style:italic; font-weight:300; font-size:clamp(20px,2.4vw,28px); color:var(--text-2); margin-bottom:4px; opacity:0; animation:up .7s ease forwards .1s; transition:color 2s; }
+
+/* CLOCK WITH SECONDS ARC */
+.clock-outer { position:relative; display:inline-block; opacity:0; animation:up .85s cubic-bezier(.22,1,.36,1) forwards .16s; }
+.clock-time { font-family:'Barlow Condensed',sans-serif; font-weight:200; font-size:clamp(110px,19vw,200px); line-height:.83; letter-spacing:-.01em; color:var(--text-1); transition:color 2s; display:inline-block; }
+.clock-ampm { font-family:'Barlow Condensed',sans-serif; font-weight:300; font-size:clamp(22px,2.8vw,32px); letter-spacing:.14em; color:var(--text-3); margin-left:12px; vertical-align:super; transition:color 2s; }
+/* Seconds arc sits behind clock text */
+#seconds-canvas { position:absolute; top:0; left:0; pointer-events:none; }
+
+.date-line { margin-top:14px; font-family:'Barlow Condensed',sans-serif; font-weight:400; font-size:clamp(15px,1.7vw,19px); letter-spacing:.18em; text-transform:uppercase; color:var(--text-2); opacity:0; animation:up .7s ease forwards .28s; transition:color 2s; }
+
+.prog-wrap { margin-top:20px; opacity:0; animation:up .7s ease forwards .38s; }
+.prog-meta { display:flex; justify-content:space-between; font-family:'Barlow Condensed',sans-serif; font-weight:400; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-bottom:8px; transition:color 2s; }
+.prog-track { width:100%; height:4px; background:var(--accent-dim); border-radius:2px; }
+.prog-fill { height:100%; background:linear-gradient(90deg,var(--prog-a),var(--prog-b),var(--prog-c)); position:relative; border-radius:2px; transition:width 1s ease; }
+.prog-fill::after { content:''; position:absolute; right:-3px; top:50%; transform:translateY(-50%); width:12px; height:12px;
+  background:var(--accent); clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%); box-shadow:0 0 12px var(--accent-glow); }
+
+/* Weather hero */
+.hero-right { text-align:right; padding-left:40px; padding-bottom:8px; display:flex; flex-direction:column; align-items:flex-end; justify-content:flex-end; opacity:0; animation:up .85s ease forwards .22s; }
+.w-icon-hero { font-size:clamp(50px,6vw,70px); line-height:1; animation:floatIcon 5s ease-in-out infinite; display:block; margin-bottom:8px; filter:drop-shadow(0 4px 14px rgba(0,0,0,0.2)); }
+@keyframes floatIcon { 0%,100%{transform:translateY(0) rotate(-2deg);} 50%{transform:translateY(-8px) rotate(2deg);} }
+.w-temp-hero { font-family:'Barlow Condensed',sans-serif; font-weight:200; font-size:clamp(64px,9vw,100px); line-height:.85; letter-spacing:-.02em; color:var(--text-1); transition:color 2s; }
+.w-temp-hero sup { font-size:.3em; color:var(--text-3); vertical-align:super; }
+.w-condition-hero { font-family:'Spectral',serif; font-style:italic; font-weight:300; font-size:clamp(16px,1.8vw,21px); color:var(--text-2); margin-top:6px; transition:color 2s; }
+
+/* ── BOTTOM ── */
+.bottom { display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr; gap:11px; border-top:1px solid var(--card-border); padding-top:16px; }
+
+.card { background:var(--card-bg); backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+  border:1px solid var(--card-border); border-radius:8px; padding:16px 18px; box-shadow:var(--card-shadow);
+  position:relative; overflow:hidden; opacity:0; animation:up .75s ease forwards; transition:background 2s,border-color 2s; }
+.card::before { content:''; position:absolute; top:0; left:0; width:14px; height:14px; border-top:2px solid var(--accent); border-left:2px solid var(--accent); opacity:.4; }
+.card::after  { content:''; position:absolute; bottom:0; right:0; width:14px; height:14px; border-bottom:2px solid var(--accent); border-right:2px solid var(--accent); opacity:.2; }
+.card:nth-child(1){animation-delay:.46s;} .card:nth-child(2){animation-delay:.55s;} .card:nth-child(3){animation-delay:.64s;} .card:nth-child(4){animation-delay:.73s;}
+
+.card-label { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:10px; letter-spacing:.26em; text-transform:uppercase; color:var(--accent); margin-bottom:13px; transition:color 2s; }
+
+/* CONDITIONS + COMPASS */
+.cond-layout { display:flex; gap:10px; align-items:flex-start; }
+.stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 8px; flex:1; }
+.stat-val { font-family:'Barlow Condensed',sans-serif; font-weight:300; font-size:clamp(18px,2.2vw,24px); color:var(--text-1); line-height:1; transition:color 2s; }
+.stat-lbl { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-3); margin-top:3px; transition:color 2s; }
+.stat-accent .stat-val { color:var(--accent); font-weight:400; }
+
+/* Compass */
+.compass-wrap { display:flex; flex-direction:column; align-items:center; gap:4px; }
+#compass-canvas { display:block; }
+.compass-dir { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px; letter-spacing:.1em; color:var(--accent); transition:color 2s; }
+
+/* TEMP GRAPH */
+.graph-wrap { position:relative; margin-top:4px; }
+#temp-graph { display:block; width:100%; }
+.graph-labels { display:flex; justify-content:space-between; margin-top:2px; }
+.graph-lbl { font-family:'Barlow Condensed',sans-serif; font-weight:300; font-size:9px; letter-spacing:.08em; color:var(--text-3); transition:color 2s; }
+
+/* SUN */
+.sun-pair { display:flex; flex-direction:column; gap:12px; }
+.sun-row { display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
+.sun-lbl { font-family:'Barlow Condensed',sans-serif; font-weight:400; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); transition:color 2s; }
+.sun-val { font-family:'Barlow Condensed',sans-serif; font-weight:300; font-size:clamp(18px,2.2vw,24px); color:var(--text-1); transition:color 2s; }
+.sun-divider { height:1px; background:var(--card-border); }
+.sun-arc-wrap { margin-top:12px; }
+.sun-arc-wrap svg { width:100%; height:auto; }
+
+/* CALENDAR */
+.cal-list { display:flex; flex-direction:column; gap:9px; }
+.cal-event { display:flex; align-items:flex-start; gap:10px; }
+.cal-dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex-shrink:0; margin-top:5px; transition:background 2s; }
+.cal-dot.soon { background:var(--cal-soon); box-shadow:0 0 8px var(--cal-soon); animation:soonPulse 1.5s ease-in-out infinite; }
+@keyframes soonPulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+.cal-title { font-family:'Barlow Condensed',sans-serif; font-weight:400; font-size:clamp(15px,1.8vw,19px); color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.1; transition:color 2s; }
+.cal-time { font-size:11px; letter-spacing:.08em; color:var(--text-3); margin-top:2px; font-family:'Barlow Condensed',sans-serif; font-weight:300; transition:color 2s; }
+.cal-time.soon { color:var(--cal-soon); font-weight:600; }
+.cal-empty { font-family:'Spectral',serif; font-style:italic; font-size:15px; color:var(--text-3); line-height:1.5; transition:color 2s; }
+
+@keyframes up { from{opacity:0;transform:translateY(14px);} to{opacity:1;transform:translateY(0);} }
+.status-msg { font-family:'Spectral',serif; font-style:italic; color:var(--text-3); font-size:14px; }
+</style>
+</head>
+<body class="day">
+
+<canvas id="sky"></canvas>
+<canvas id="particles"></canvas>
+<div class="grain"></div>
+<div class="parallax-wrap" id="parallax-wrap"></div>
+
+<div class="shell">
+  <div class="hero">
+    <div class="hero-left">
+      <div class="loc-row"><div class="loc-pip"></div><span class="loc-label">North Shore · Auckland · NZ</span></div>
+      <div class="greeting" id="greeting">Good morning, Luke</div>
+      <div class="clock-outer" id="clock-outer">
+        <canvas id="seconds-canvas"></canvas>
+        <span class="clock-time" id="clock-time">10:41</span><span class="clock-ampm" id="clock-ampm">AM</span>
+      </div>
+      <div class="date-line" id="date-line">Thursday · 24 April · 2026</div>
+      <div class="prog-wrap">
+        <div class="prog-meta"><span>Day Progress</span><span id="day-pct">0%</span></div>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="hero-right">
+      <span class="w-icon-hero" id="w-icon">⛅</span>
+      <div class="w-temp-hero" id="w-temp">--<sup>°C</sup></div>
+      <div class="w-condition-hero" id="w-condition">Loading…</div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <!-- CONDITIONS + COMPASS -->
+    <div class="card">
+      <div class="card-label">Conditions</div>
+      <div class="cond-layout">
+        <div class="stat-grid">
+          <div class="stat-item"><div class="stat-val" id="w-feels">--°</div><div class="stat-lbl">Feels Like</div></div>
+          <div class="stat-item"><div class="stat-val" id="w-humid">--%</div><div class="stat-lbl">Humidity</div></div>
+          <div class="stat-item"><div class="stat-val" id="w-wind">--</div><div class="stat-lbl">Wind km/h</div></div>
+          <div class="stat-item stat-accent"><div class="stat-val" id="w-rain">--%</div><div class="stat-lbl">Rain Today</div></div>
+        </div>
+        <div class="compass-wrap">
+          <canvas id="compass-canvas" width="64" height="64"></canvas>
+          <div class="compass-dir" id="compass-dir">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEMP GRAPH -->
+    <div class="card">
+      <div class="card-label">Temperature Today</div>
+      <div class="graph-wrap">
+        <canvas id="temp-graph" height="80"></canvas>
+        <div class="graph-labels" id="graph-labels"></div>
+      </div>
+    </div>
+
+    <!-- SUN -->
+    <div class="card">
+      <div class="card-label">Sun · North Shore</div>
+      <div class="sun-pair">
+        <div class="sun-row"><span class="sun-lbl">🌅 Sunrise</span><span class="sun-val" id="sunrise-val">--:--</span></div>
+        <div class="sun-divider"></div>
+        <div class="sun-row"><span class="sun-lbl">🌇 Sunset</span><span class="sun-val" id="sunset-val">--:--</span></div>
+      </div>
+      <div class="sun-arc-wrap">
+        <svg id="sun-svg" viewBox="0 0 220 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 10 62 Q 110 -10 210 62" stroke="rgba(160,96,16,0.2)" stroke-width="1.5" fill="none" stroke-dasharray="3 4"/>
+          <path id="sun-prog" d="M 10 62 Q 110 -10 210 62" stroke="url(#sg)" stroke-width="2.5" fill="none" stroke-dasharray="0 1000" stroke-linecap="round"/>
+          <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#fbbf24"/></linearGradient></defs>
+          <line x1="4" y1="64" x2="216" y2="64" stroke="rgba(160,96,16,0.2)" stroke-width="1"/>
+          <circle id="sun-dot" cx="10" cy="62" r="6" fill="#fbbf24"/>
+          <circle id="sun-glow" cx="10" cy="62" r="11" fill="rgba(251,191,36,0.22)"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="card">
+      <div class="card-label">Today's Schedule</div>
+      <div class="cal-list" id="cal-list"><div class="status-msg">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// SKY CANVAS
+// ══════════════════════════════════════
+const skyCanvas = document.getElementById('sky');
+const skyCtx = skyCanvas.getContext('2d');
+let SW, SH, skyFrame = 0;
+const stars = Array.from({length:130},()=>({x:Math.random(),y:Math.random()*0.68,r:Math.random()*1.4+0.2,speed:Math.random()*0.013+0.003,phase:Math.random()*Math.PI*2}));
+const clouds = Array.from({length:5},()=>({x:Math.random()*1.3,y:0.12+Math.random()*0.32,w:0.2+Math.random()*0.25,speed:0.000007+Math.random()*0.00001,alpha:0.05+Math.random()*0.08}));
+
+const SKY={
+  0:['#04040c','#0a0d1c','#0d1020'],1:['#04040c','#0a0d1c','#0d1020'],2:['#04040c','#0a0d1c','#0e1122'],
+  3:['#06060e','#0d1025','#121530'],4:['#0a0c1a','#14183a','#1c2245'],5:['#160e30','#2a1a50','#442060'],
+  6:['#2a1440','#6a3060','#d06040'],7:['#3a2255','#8a4870','#e88050'],8:['#4a5880','#7898b8','#c8a878'],
+  9:['#5070a0','#7aaccc','#d8c4a0'],10:['#5880a8','#82b2cc','#e0d0b0'],11:['#5888b0','#88b8d0','#e8dcc0'],
+  12:['#4880a8','#80b0cc','#e4d8c0'],13:['#4880a8','#80b0cc','#e4d8c0'],14:['#4878a0','#78a8c8','#dcd0b8'],
+  15:['#406890','#7098b8','#d4c4a8'],16:['#384878','#7878a8','#c8a880'],17:['#302850','#8a5870','#e07840'],
+  18:['#201830','#7a3850','#e05830'],19:['#160e22','#502030','#c03820'],20:['#0e0a18','#280e20','#6a1810'],
+  21:['#080810','#100a18','#160c12'],22:['#060608','#0a0810','#0e0a10'],23:['#04040c','#08060e','#0c080e'],
+};
+function lerp(a,b,t){return a+(b-a)*t;}
+function h2r(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function blend(a,b,t){const ra=h2r(a),rb=h2r(b);return`rgb(${Math.round(lerp(ra[0],rb[0],t))},${Math.round(lerp(ra[1],rb[1],t))},${Math.round(lerp(ra[2],rb[2],t))})`;}
+function skyColors(){const now=new Date(),h=now.getHours(),t=now.getMinutes()/60,n=(h+1)%24,pA=SKY[h],pB=SKY[n];return[blend(pA[0],pB[0],t),blend(pA[1],pB[1],t),blend(pA[2],pB[2],t)];}
+function starAlpha(){const h=new Date().getHours(),m=new Date().getMinutes()/60;if(h>=8&&h<18)return 0;if(h>=18&&h<20)return((h-18+m)/2)*0.95;if(h>=6&&h<8)return Math.max(0,1-(h-6+m)/2)*0.95;return 0.95;}
+
+function resizeSky(){SW=skyCanvas.width=window.innerWidth;SH=skyCanvas.height=window.innerHeight;}
+resizeSky(); window.addEventListener('resize',resizeSky);
+
+function drawSky(){
+  skyFrame++;
+  skyCtx.clearRect(0,0,SW,SH);
+  const[top,mid,bot]=skyColors();
+  const g=skyCtx.createLinearGradient(0,0,0,SH);
+  g.addColorStop(0,top);g.addColorStop(0.5,mid);g.addColorStop(1,bot);
+  skyCtx.fillStyle=g;skyCtx.fillRect(0,0,SW,SH);
+  const sa=starAlpha();
+  if(sa>0)stars.forEach(s=>{const tw=0.35+Math.abs(Math.sin(skyFrame*s.speed+s.phase))*0.65;skyCtx.beginPath();skyCtx.arc(s.x*SW,s.y*SH,s.r,0,Math.PI*2);skyCtx.fillStyle=`rgba(255,245,230,${sa*tw})`;skyCtx.fill();});
+  const hh=new Date().getHours();
+  const cv=hh>=6&&hh<20?Math.min(1,(hh-6)/2)*Math.min(1,(20-hh)/2):0;
+  if(cv>0)clouds.forEach(c=>{c.x=(c.x+c.speed)%1.4;const cg=skyCtx.createRadialGradient(c.x*SW,c.y*SH,0,c.x*SW,c.y*SH,c.w*SW);cg.addColorStop(0,`rgba(255,255,255,${c.alpha*cv})`);cg.addColorStop(1,'transparent');skyCtx.fillStyle=cg;skyCtx.fillRect(0,0,SW,SH);});
+  const dawn=hh>=5&&hh<=8?(8-hh-new Date().getMinutes()/60)/3:0;
+  const dusk=hh>=16&&hh<=20?(hh-16+new Date().getMinutes()/60)/4:0;
+  const glow=Math.max(dawn,dusk);
+  if(glow>0){const hg=skyCtx.createLinearGradient(0,SH*0.5,0,SH);hg.addColorStop(0,'transparent');hg.addColorStop(0.5,`rgba(220,100,40,${0.22*glow})`);hg.addColorStop(1,`rgba(180,60,20,${0.12*glow})`);skyCtx.fillStyle=hg;skyCtx.fillRect(0,0,SW,SH);}
+  if(hh>=21||hh<5){const ep=0.55+Math.sin(skyFrame*0.014)*0.45;const eg=skyCtx.createRadialGradient(SW*0.04,SH,0,SW*0.04,SH,SW*0.28*ep);eg.addColorStop(0,`rgba(165,95,12,${0.16*ep})`);eg.addColorStop(1,'transparent');skyCtx.fillStyle=eg;skyCtx.fillRect(0,0,SW,SH);}
+  const vg=skyCtx.createLinearGradient(0,SH*0.6,0,SH);vg.addColorStop(0,'transparent');vg.addColorStop(1,'rgba(0,0,0,0.3)');skyCtx.fillStyle=vg;skyCtx.fillRect(0,0,SW,SH);
+  requestAnimationFrame(drawSky);
+}
+drawSky();
+
+// ══════════════════════════════════════
+// WEATHER PARTICLES
+// ══════════════════════════════════════
+const pCanvas = document.getElementById('particles');
+const pCtx = pCanvas.getContext('2d');
+let PW, PH, weatherType = 'clear', particles = [];
+
+function resizeP(){PW=pCanvas.width=window.innerWidth;PH=pCanvas.height=window.innerHeight;}
+resizeP(); window.addEventListener('resize',resizeP);
+
+function initParticles(type){
+  particles=[];
+  weatherType=type;
+  if(type==='rain'||type==='drizzle'){
+    const count=type==='rain'?140:70;
+    for(let i=0;i<count;i++) particles.push({x:Math.random()*1.2,y:Math.random(),len:type==='rain'?0.022:0.012,speed:type==='rain'?0.018:0.01,alpha:type==='rain'?0.35:0.2,wx:0.004});
+  } else if(type==='storm'){
+    for(let i=0;i<180;i++) particles.push({x:Math.random()*1.3,y:Math.random(),len:0.028,speed:0.026,alpha:0.4,wx:0.007});
+  } else if(type==='sun'){
+    // Floating golden dust motes
+    for(let i=0;i<55;i++) particles.push({x:Math.random(),y:Math.random(),r:Math.random()*2+0.5,vx:(Math.random()-.5)*0.0008,vy:-(Math.random()*0.0006+0.0002),alpha:Math.random()*0.4+0.1,life:Math.random()});
+  } else if(type==='cloud'){
+    // Slow drifting haze dots
+    for(let i=0;i<30;i++) particles.push({x:Math.random(),y:Math.random()*0.6,r:Math.random()*3+1,vx:Math.random()*0.0004+0.0001,vy:0,alpha:Math.random()*0.12+0.03});
+  }
+}
+
+function drawParticles(){
+  pCtx.clearRect(0,0,PW,PH);
+  if(weatherType==='rain'||weatherType==='drizzle'||weatherType==='storm'){
+    pCtx.strokeStyle=weatherType==='storm'?'rgba(160,180,220,0.5)':'rgba(160,200,240,0.45)';
+    pCtx.lineWidth=weatherType==='storm'?1.2:0.8;
+    particles.forEach(p=>{
+      pCtx.globalAlpha=p.alpha;
+      pCtx.beginPath();
+      pCtx.moveTo(p.x*PW,p.y*PH);
+      pCtx.lineTo((p.x+p.wx)*PW,(p.y+p.len)*PH);
+      pCtx.stroke();
+      p.x+=p.wx; p.y+=p.speed;
+      if(p.y>1){p.y=-0.05;p.x=Math.random()*1.2;}
+    });
+    pCtx.globalAlpha=1;
+  } else if(weatherType==='sun'){
+    particles.forEach(p=>{
+      pCtx.beginPath();
+      pCtx.arc(p.x*PW,p.y*PH,p.r,0,Math.PI*2);
+      pCtx.fillStyle=`rgba(255,200,80,${p.alpha})`;
+      pCtx.fill();
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.y<0){p.y=1;p.x=Math.random();}
+      if(p.x<0||p.x>1){p.x=Math.random();}
+    });
+  } else if(weatherType==='cloud'){
+    particles.forEach(p=>{
+      const g=pCtx.createRadialGradient(p.x*PW,p.y*PH,0,p.x*PW,p.y*PH,p.r*20);
+      g.addColorStop(0,`rgba(200,210,220,${p.alpha})`);g.addColorStop(1,'transparent');
+      pCtx.fillStyle=g;pCtx.fillRect(0,0,PW,PH);
+      p.x+=p.vx;
+      if(p.x>1.1)p.x=-0.1;
+    });
+  }
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+// ══════════════════════════════════════
+// PARALLAX — subtle scroll with time
+// ══════════════════════════════════════
+let parallaxT = 0;
+function updateParallax(){
+  parallaxT += 0.002;
+  const shell = document.querySelector('.shell');
+  if(shell){
+    const dx = Math.sin(parallaxT) * 3;
+    const dy = Math.cos(parallaxT * 0.7) * 2;
+    shell.style.transform = `translate(${dx}px,${dy}px)`;
+  }
+  requestAnimationFrame(updateParallax);
+}
+updateParallax();
+
+// ══════════════════════════════════════
+// SECONDS ARC
+// ══════════════════════════════════════
+function drawSecondsArc(){
+  const outer = document.getElementById('clock-outer');
+  const canvas = document.getElementById('seconds-canvas');
+  const timeEl = document.getElementById('clock-time');
+  const W = outer.offsetWidth || 400;
+  const H = outer.offsetHeight || 180;
+  canvas.width = W; canvas.height = H;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+
+  const ctx = canvas.getContext('2d');
+  const sec = new Date().getSeconds();
+  const pct = sec / 60;
+  const isNight = document.body.classList.contains('night');
+  const accentCol = isNight ? '#d4922a' : '#a06010';
+
+  ctx.clearRect(0,0,W,H);
+  // Track
+  ctx.beginPath();
+  ctx.rect(0, H-3, W, 3);
+  ctx.fillStyle = isNight ? 'rgba(212,146,42,0.1)' : 'rgba(160,96,16,0.1)';
+  ctx.fill();
+  // Fill
+  ctx.beginPath();
+  ctx.rect(0, H-3, W*pct, 3);
+  ctx.fillStyle = accentCol;
+  ctx.fill();
+  // Glow dot
+  ctx.beginPath();
+  ctx.arc(W*pct, H-1.5, 4, 0, Math.PI*2);
+  ctx.fillStyle = accentCol;
+  ctx.shadowColor = accentCol;
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+setInterval(drawSecondsArc, 1000);
+drawSecondsArc();
+
+// ══════════════════════════════════════
+// COMPASS
+// ══════════════════════════════════════
+function drawCompass(deg, dir){
+  const canvas = document.getElementById('compass-canvas');
+  const ctx = canvas.getContext('2d');
+  const cx=32, cy=32, r=28;
+  const isNight = document.body.classList.contains('night');
+  const accent = isNight ? '#d4922a' : '#a06010';
+  const textCol = isNight ? '#f0e8d4' : '#1c1710';
+  const dimCol = isNight ? 'rgba(212,146,42,0.2)' : 'rgba(160,96,16,0.15)';
+
+  ctx.clearRect(0,0,64,64);
+  // Outer ring
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle=dimCol; ctx.lineWidth=1.5; ctx.stroke();
+  // Cardinal marks
+  ['N','E','S','W'].forEach((c,i)=>{
+    const a=i*Math.PI/2 - Math.PI/2;
+    const mx=cx+Math.cos(a)*(r-5), my=cy+Math.sin(a)*(r-5);
+    ctx.fillStyle=c==='N'?accent:dimCol.replace('0.2','0.5').replace('0.15','0.35');
+    ctx.font=`bold 7px Barlow Condensed`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(c,mx,my);
+  });
+  // Needle
+  const rad = (deg-90)*Math.PI/180;
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(rad);
+  // North tip (accent colour)
+  ctx.beginPath(); ctx.moveTo(0,-r+8); ctx.lineTo(-4,0); ctx.lineTo(0,4); ctx.lineTo(4,0);
+  ctx.fillStyle=accent; ctx.fill();
+  // South tip (dim)
+  ctx.beginPath(); ctx.moveTo(0,4); ctx.lineTo(-4,0); ctx.lineTo(0,r-8); ctx.lineTo(4,0);
+  ctx.fillStyle=dimCol; ctx.fill();
+  ctx.restore();
+  // Centre dot
+  ctx.beginPath(); ctx.arc(cx,cy,3,0,Math.PI*2); ctx.fillStyle=accent; ctx.fill();
+  document.getElementById('compass-dir').textContent = dir || degToDir(deg);
+}
+
+function degToDir(d){
+  const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(d/22.5)%16];
+}
+
+// ══════════════════════════════════════
+// TEMPERATURE GRAPH
+// ══════════════════════════════════════
+function drawTempGraph(hourlyTemps, hourlyTimes){
+  const canvas = document.getElementById('temp-graph');
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio || 300;
+  const W = canvas.width, H = canvas.height = 80 * window.devicePixelRatio;
+  canvas.style.height = '80px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  const cW = canvas.offsetWidth, cH = 80;
+
+  const isNight = document.body.classList.contains('night');
+  const accent = isNight ? '#d4922a' : '#a06010';
+  const textCol = isNight ? 'rgba(200,184,144,0.6)' : 'rgba(122,106,80,0.8)';
+
+  const min=Math.min(...hourlyTemps)-1, max=Math.max(...hourlyTemps)+1;
+  const scaleY=t=>cH-8-((t-min)/(max-min))*(cH-16);
+  const scaleX=(_,i)=>(i/(hourlyTemps.length-1))*cW;
+
+  ctx.clearRect(0,0,cW,cH);
+
+  // Fill
+  const fillGrad = ctx.createLinearGradient(0,0,0,cH);
+  fillGrad.addColorStop(0, isNight?'rgba(212,146,42,0.18)':'rgba(160,96,16,0.12)');
+  fillGrad.addColorStop(1,'transparent');
+  ctx.beginPath();
+  ctx.moveTo(scaleX(null,0), cH);
+  hourlyTemps.forEach((t,i)=>{ i===0?ctx.lineTo(scaleX(null,i),scaleY(t)):ctx.lineTo(scaleX(null,i),scaleY(t)); });
+  ctx.lineTo(scaleX(null,hourlyTemps.length-1),cH);
+  ctx.closePath(); ctx.fillStyle=fillGrad; ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  hourlyTemps.forEach((t,i)=>{ i===0?ctx.moveTo(scaleX(null,i),scaleY(t)):ctx.lineTo(scaleX(null,i),scaleY(t)); });
+  ctx.strokeStyle=accent; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+
+  // Current time marker
+  const nowH = new Date().getHours();
+  const nowI = hourlyTimes.findIndex(t=>new Date(t).getHours()>=nowH);
+  if(nowI>=0){
+    const nx=scaleX(null,nowI), ny=scaleY(hourlyTemps[nowI]);
+    ctx.beginPath(); ctx.arc(nx,ny,4,0,Math.PI*2);
+    ctx.fillStyle=accent; ctx.shadowColor=accent; ctx.shadowBlur=10; ctx.fill(); ctx.shadowBlur=0;
+    // Temp label
+    ctx.fillStyle=accent; ctx.font=`bold ${11*window.devicePixelRatio/window.devicePixelRatio}px Barlow Condensed`;
+    ctx.textAlign='center'; ctx.fillText(`${hourlyTemps[nowI]}°`,nx,ny-8);
+  }
+
+  // Animate in — draw graph labels
+  const labelEls = document.getElementById('graph-labels');
+  const picks=[0,3,6,9,11];
+  labelEls.innerHTML=picks.filter(i=>i<hourlyTimes.length).map(i=>{
+    const hh=new Date(hourlyTimes[i]).getHours();
+    return`<span class="graph-lbl">${hh===0?'12am':(hh%12||12)+(hh>=12?'pm':'am')}</span>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+// THEME
+// ══════════════════════════════════════
+let currentTheme=null;
+function applyTheme(h){
+  const t=(h>=21||h<5)?'night':'day';
+  if(t===currentTheme)return;
+  currentTheme=t;
+  document.body.classList.remove('day','night');
+  document.body.classList.add(t);
+}
+
+// ══════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════
+function updateClock(){
+  const now=new Date(),h=now.getHours(),m=now.getMinutes();
+  applyTheme(h);
+  const period=h>=12?'PM':'AM',h12=h%12||12;
+  document.getElementById('clock-time').textContent=`${h12}:${String(m).padStart(2,'0')}`;
+  document.getElementById('clock-ampm').textContent=period;
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('date-line').textContent=`${days[now.getDay()]} · ${now.getDate()} ${months[now.getMonth()]} · ${now.getFullYear()}`;
+  document.getElementById('greeting').textContent=h>=5&&h<12?'Good morning, Luke':h>=12&&h<17?'Good afternoon, Luke':h>=17&&h<21?'Good evening, Luke':'Up late, Luke?';
+  const pct=Math.min(100,Math.max(0,Math.round((h*60+m-300)/(21*60-300)*100)));
+  document.getElementById('day-pct').textContent=`${pct}%`;
+  document.getElementById('prog-fill').style.width=`${pct}%`;
+  drawSecondsArc();
+}
+updateClock(); setInterval(updateClock,1000);
+
+// ══════════════════════════════════════
+// SUN ARC
+// ══════════════════════════════════════
+function updateSunArc(sr,ss){
+  const now=new Date(),pct=Math.min(1,Math.max(0,(now-sr)/(ss-sr)));
+  const t=pct;
+  const bx=(1-t)*(1-t)*10+2*(1-t)*t*110+t*t*210;
+  const by=(1-t)*(1-t)*62+2*(1-t)*t*(-10)+t*t*62;
+  ['sun-dot','sun-glow'].forEach(id=>{
+    document.getElementById(id).setAttribute('cx',bx.toFixed(1));
+    document.getElementById(id).setAttribute('cy',by.toFixed(1));
+  });
+  document.getElementById('sun-prog').setAttribute('stroke-dasharray',`${pct*290} 1000`);
+}
+
+// ══════════════════════════════════════
+// WEATHER
+// ══════════════════════════════════════
+const WMO={
+  0:{l:'Clear sky',e:'☀️',p:'sun'},1:{l:'Mainly clear',e:'🌤️',p:'sun'},2:{l:'Partly cloudy',e:'⛅',p:'cloud'},3:{l:'Overcast',e:'☁️',p:'cloud'},
+  45:{l:'Foggy',e:'🌫️',p:'cloud'},48:{l:'Icy fog',e:'🌫️',p:'cloud'},
+  51:{l:'Light drizzle',e:'🌦️',p:'drizzle'},53:{l:'Drizzle',e:'🌦️',p:'drizzle'},55:{l:'Heavy drizzle',e:'🌧️',p:'rain'},
+  61:{l:'Light rain',e:'🌧️',p:'rain'},63:{l:'Rain',e:'🌧️',p:'rain'},65:{l:'Heavy rain',e:'🌧️',p:'rain'},
+  80:{l:'Light showers',e:'🌦️',p:'drizzle'},81:{l:'Showers',e:'🌧️',p:'rain'},82:{l:'Heavy showers',e:'⛈️',p:'storm'},
+  95:{l:'Thunderstorm',e:'⛈️',p:'storm'},99:{l:'Hail storm',e:'⛈️',p:'storm'},
+};
+const wmo=c=>WMO[c]||{l:'Unknown',e:'🌡️',p:'cloud'};
+
+async function fetchWeather(){
+  try {
+    const d=await(await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=-36.78&longitude=174.75'+
+      '&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code'+
+      '&hourly=temperature_2m,weather_code,precipitation_probability'+
+      '&daily=sunrise,sunset,precipitation_probability_max'+
+      '&timezone=Pacific%2FAuckland&forecast_days=1'
+    )).json();
+    const cur=d.current,w=wmo(cur.weather_code);
+    document.getElementById('w-icon').textContent=w.e;
+    document.getElementById('w-temp').innerHTML=`${Math.round(cur.temperature_2m)}<sup>°C</sup>`;
+    document.getElementById('w-condition').textContent=w.l;
+    document.getElementById('w-feels').textContent=`${Math.round(cur.apparent_temperature)}°`;
+    document.getElementById('w-humid').textContent=`${cur.relative_humidity_2m}%`;
+    document.getElementById('w-wind').textContent=`${Math.round(cur.wind_speed_10m)}`;
+    document.getElementById('w-rain').textContent=`${d.daily.precipitation_probability_max[0]}%`;
+
+    drawCompass(cur.wind_direction_10m, degToDir(cur.wind_direction_10m));
+
+    const fmt=s=>{const t=new Date(s),h=t.getHours(),m=t.getMinutes();return`${h%12||12}:${String(m).padStart(2,'0')}${h>=12?'pm':'am'}`;};
+    document.getElementById('sunrise-val').textContent=fmt(d.daily.sunrise[0]);
+    document.getElementById('sunset-val').textContent=fmt(d.daily.sunset[0]);
+    const sr=new Date(d.daily.sunrise[0]),ss=new Date(d.daily.sunset[0]);
+    updateSunArc(sr,ss);
+    setInterval(()=>updateSunArc(sr,ss),60000);
+
+    // Temp graph — today's hourly
+    const nowH=new Date().getHours();
+    const allTimes=d.hourly.time,allTemps=d.hourly.temperature_2m;
+    const todayTemps=allTemps.slice(0,24),todayTimes=allTimes.slice(0,24);
+    setTimeout(()=>drawTempGraph(todayTemps,todayTimes),600);
+
+    // Particles
+    initParticles(w.p);
+  } catch(e){
+    document.getElementById('w-condition').textContent='Open in Safari to load';
+    initParticles('clear');
+  }
+}
+fetchWeather(); setInterval(fetchWeather,15*60*1000);
+
+// ══════════════════════════════════════
+// CALENDAR via ICS feed
+// ══════════════════════════════════════
+const ICS_URL = 'https://calendar.google.com/calendar/ical/luke%40lsntech.co.nz/public/basic.ics';
+const ICS_PROXY = 'https://api.allorigins.win/raw?url=';
+
+async function fetchCalendar(){
+  try {
+    const res = await fetch(ICS_PROXY + encodeURIComponent(ICS_URL));
+    const text = await res.text();
+    const events = parseICS(text);
+    renderCal(events);
+  } catch(e){
+    document.getElementById('cal-list').innerHTML='<div class="cal-empty">Calendar unavailable</div>';
+  }
+}
+
+function parseICS(icsText){
+  const now = new Date();
+  const nzNow = new Date(now.toLocaleString('en-NZ',{timeZone:'Pacific/Auckland'}));
+  const y=nzNow.getFullYear(), mo=nzNow.getMonth(), d=nzNow.getDate();
+  const nowMins = nzNow.getHours()*60+nzNow.getMinutes();
+  const blocks = icsText.split('BEGIN:VEVENT').slice(1);
+  const events = [];
+
+  blocks.forEach(block => {
+    const get = key => { const m=block.match(new RegExp(key+'[^:\\r\\n]*:([^\\r\\n]+)')); return m?m[1].trim():null; };
+    const summary = (get('SUMMARY')||'Untitled').replace(/\\,/g,',').replace(/\\n/g,' ');
+    const dtstart = get('DTSTART');
+    if (!dtstart) return;
+    const startStr = dtstart.replace(/.*:/,'');
+    const isAllDay = startStr.length===8;
+
+    if (isAllDay) {
+      const sy=parseInt(startStr.slice(0,4)),sm=parseInt(startStr.slice(4,6))-1,sd=parseInt(startStr.slice(6,8));
+      if(sy!==y||sm!==mo||sd!==d) return;
+      events.push({title:summary,startTime:'All day',endTime:'',allDay:true,rawMins:-1});
+    } else {
+      const parse = s => {
+        const c=s.replace('Z',''); 
+        const yr=parseInt(c.slice(0,4)),mn=parseInt(c.slice(4,6))-1,dy=parseInt(c.slice(6,8)),hh=parseInt(c.slice(9,11)||0),mm=parseInt(c.slice(11,13)||0);
+        return s.endsWith('Z')?new Date(Date.UTC(yr,mn,dy,hh,mm)):new Date(yr,mn,dy,hh,mm);
+      };
+      const start = parse(startStr);
+      const nzStart = new Date(start.toLocaleString('en-NZ',{timeZone:'Pacific/Auckland'}));
+      if(nzStart.getFullYear()!==y||nzStart.getMonth()!==mo||nzStart.getDate()!==d) return;
+      const fmt = dt => { const nz=new Date(dt.toLocaleString('en-NZ',{timeZone:'Pacific/Auckland'})),h=nz.getHours(),m=nz.getMinutes(); return `${h%12||12}:${String(m).padStart(2,'0')}${h>=12?'pm':'am'}`; };
+      const dtend = get('DTEND');
+      const rawMins = nzStart.getHours()*60+nzStart.getMinutes();
+      events.push({title:summary,startTime:fmt(start),endTime:dtend?fmt(parse(dtend.replace(/.*:/,''))):'',allDay:false,rawMins});
+    }
+  });
+  return events.sort((a,b)=>a.rawMins-b.rawMins);
+}
+
+function renderCal(events){
+  const list=document.getElementById('cal-list');
+  if(!events.length){list.innerHTML='<div class="cal-empty">Nothing scheduled —<br>enjoy the day</div>';return;}
+  const nzNow=new Date(new Date().toLocaleString('en-NZ',{timeZone:'Pacific/Auckland'}));
+  const nowMins=nzNow.getHours()*60+nzNow.getMinutes();
+  list.innerHTML=events.slice(0,4).map(ev=>{
+    let label='',soon=false;
+    if(ev.allDay){label='All day';}
+    else{
+      const diff=ev.rawMins-nowMins;
+      if(diff<-60)label=ev.startTime;
+      else if(diff<0)label='In progress';
+      else if(diff<=30){label=`In ${diff}m`;soon=true;}
+      else label=ev.startTime;
+    }
+    return`<div class="cal-event"><div class="cal-dot ${soon?'soon':''}"></div><div><div class="cal-title">${ev.title}</div><div class="cal-time ${soon?'soon':''}">${label}</div></div></div>`;
+  }).join('');
+}
+
+fetchCalendar(); setInterval(fetchCalendar,5*60*1000);
+
+// Redraw compass on theme change
+setInterval(()=>{
+  const d=document.getElementById('compass-dir').textContent;
+}, 2000);
+</script>
+</body>
+</html>
